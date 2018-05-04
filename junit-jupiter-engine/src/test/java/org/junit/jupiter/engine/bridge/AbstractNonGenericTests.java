@@ -18,7 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * @since 5.0
  */
 @ExtendWith(NumberResolver.class)
-abstract class AbstractNonGenericTests {
+public abstract class AbstractNonGenericTests {
 
 	@Test
 	void mA() {
@@ -31,7 +31,7 @@ abstract class AbstractNonGenericTests {
 		Assertions.assertEquals(42, value);
 	}
 
-	static class B extends AbstractNonGenericTests {
+	public static class B extends AbstractNonGenericTests {
 
 		@Test
 		void mB() {

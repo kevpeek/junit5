@@ -12,6 +12,7 @@ package org.junit.platform.commons.util;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.engine.bridge.AbstractNonGenericTests;
 import org.junit.jupiter.extensions.TempDirectory;
 import org.junit.jupiter.extensions.TempDirectory.Root;
 import org.junit.platform.commons.JUnitException;
@@ -728,6 +729,24 @@ class ReflectionUtilsTests {
 		// have the same behavior. We shouldn't care whether the return type is generic or not.
 		assertEquals(method1.isPresent(), method2.isPresent());
 	}
+
+    // New test case
+    @Test
+    void findMethodNewTest5() {
+        Optional<Method> method = findMethod(AbstractNonGenericTests.B.class, "test", Number.class);
+        // we expect this method to be found
+        assertThat(method).isNotEmpty();
+        assertThat(method.get().getParameterTypes()[0]).isEqualTo(Number.class);
+    }
+
+    // New test case
+    @Test
+    void findMethodNewTest6() {
+        Optional<Method> method = findMethod(AbstractNonGenericTests.B.class, "test", Byte.class);
+        // we expect this method to be found
+        assertThat(method).isNotEmpty();
+        assertThat(method.get().getParameterTypes()[0]).isEqualTo(Byte.class);
+    }
 
 	/**
 	 * @see #findMethodByParameterTypesWithOverloadedMethodNextToGenericDefaultMethod()

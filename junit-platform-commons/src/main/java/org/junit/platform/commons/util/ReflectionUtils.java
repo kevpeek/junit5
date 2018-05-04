@@ -1001,21 +1001,21 @@ public final class ReflectionUtils {
 			List<Method> methods = current.isInterface() ? getMethods(current) : getDeclaredMethods(current, BOTTOM_UP);
 			for (Method method : methods) {
 				if (predicate.test(method)) {
-					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(method, lower.getName(), lower.getParameterTypes(), clazz))) {
+//					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(method, lower.getName(), lower.getParameterTypes(), clazz))) {
 						return Optional.of(method);
-					}
+//					}
 				}
-				previousMethods.add(method);
+//				previousMethods.add(method);
 			}
 
 			// Search for match in interfaces implemented by current type
 			for (Class<?> ifc : current.getInterfaces()) {
 				Optional<Method> optional = findMethod(ifc, predicate);
 				if (optional.isPresent()) {
-					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(optional.get(), lower.getName(), lower.getParameterTypes(), clazz))) {
+//					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(optional.get(), lower.getName(), lower.getParameterTypes(), clazz))) {
 						return optional;
-					}
-					methods.add(optional.get());
+//					}
+//					methods.add(optional.get());
 				}
 			}
 		}
@@ -1332,8 +1332,6 @@ public final class ReflectionUtils {
 				}
 			}
 		}
-
-
 
 		// param count is equal, but types do not match exactly: check for method sub-signatures
 		// https://docs.oracle.com/javase/specs/jls/se8/html/jls-8.html#jls-8.4.2

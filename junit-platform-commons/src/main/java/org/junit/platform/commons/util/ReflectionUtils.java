@@ -14,17 +14,40 @@ import org.apiguardian.api.API;
 import org.junit.platform.commons.JUnitException;
 
 import java.io.File;
-import java.lang.reflect.*;
+import java.lang.reflect.AccessibleObject;
+import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.stream.Collectors.*;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 import static org.apiguardian.api.API.Status.INTERNAL;
 import static org.junit.platform.commons.util.CollectionUtils.toUnmodifiableList;
 import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
@@ -964,7 +987,7 @@ public final class ReflectionUtils {
 		Preconditions.notNull(parameterTypes, "Parameter types array must not be null");
 		Preconditions.containsNoNullElements(parameterTypes, "Individual parameter types must not be null");
 
-		return findMethod(clazz, method -> hasCompatibleSignature(method, methodName, parameterTypes));
+		return findMethod(clazz, method -> hasCompatibleSignature(method, methodName, parameterTypes, clazz));
 	}
 
 	private static Optional<Method> findMethod(Class<?> clazz, Predicate<Method> predicate) {
@@ -978,7 +1001,7 @@ public final class ReflectionUtils {
 			List<Method> methods = current.isInterface() ? getMethods(current) : getDeclaredMethods(current, BOTTOM_UP);
 			for (Method method : methods) {
 				if (predicate.test(method)) {
-					if (previousMethods.stream().noneMatch(lower -> isMethodShadowedBy(method, lower))) {
+					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(method, lower.getName(), lower.getParameterTypes(), clazz))) {
 						return Optional.of(method);
 					}
 				}
@@ -989,7 +1012,7 @@ public final class ReflectionUtils {
 			for (Class<?> ifc : current.getInterfaces()) {
 				Optional<Method> optional = findMethod(ifc, predicate);
 				if (optional.isPresent()) {
-					if (previousMethods.stream().noneMatch(lower -> isMethodShadowedBy(optional.get(), lower))) {
+					if (previousMethods.stream().noneMatch(lower -> hasCompatibleSignature(optional.get(), lower.getName(), lower.getParameterTypes(), clazz))) {
 						return optional;
 					}
 					methods.add(optional.get());
@@ -1268,7 +1291,7 @@ public final class ReflectionUtils {
 	}
 
 	private static boolean isMethodShadowedBy(Method upper, Method lower) {
-		return hasCompatibleSignature(upper, lower.getName(), lower.getParameterTypes());
+		return hasCompatibleSignature(upper, lower.getName(), lower.getParameterTypes(), null);
 	}
 
 	/**
@@ -1277,7 +1300,7 @@ public final class ReflectionUtils {
 	 * has the supplied name and parameter types, taking method sub-signatures
 	 * and generics into account.
 	 */
-	private static boolean hasCompatibleSignature(Method candidate, String methodName, Class<?>[] parameterTypes) {
+	private static boolean hasCompatibleSignature(Method candidate, String methodName, Class<?>[] parameterTypes, Class<?> concreteCallingClass) {
 		if (!methodName.equals(candidate.getName())) {
 			return false;
 		}
@@ -1288,6 +1311,30 @@ public final class ReflectionUtils {
 		if (Arrays.equals(parameterTypes, candidate.getParameterTypes())) {
 			return true;
 		}
+
+		// get all type params from the concrete class
+		Map<TypeVariable, Class<?>> typeVariableMap = new HashMap<>();
+
+		if (concreteCallingClass != null) {
+			List<Type> superTypes = new ArrayList<>();
+			superTypes.addAll(Arrays.asList(concreteCallingClass.getGenericInterfaces()));
+			superTypes.add(concreteCallingClass.getGenericSuperclass());
+			for (Type superType : superTypes) {
+				if (!(superType instanceof ParameterizedType)) {
+					continue;
+				}
+
+				Class<?> superTypeClass = (Class<?>) ((ParameterizedType) superType).getRawType();
+				for (int i = 0; i < superTypeClass.getTypeParameters().length; i++) {
+					TypeVariable variable = superTypeClass.getTypeParameters()[i];
+					Class<?> actualType = (Class<?>) ((ParameterizedType) superType).getActualTypeArguments()[i];
+					typeVariableMap.put(variable, actualType);
+				}
+			}
+		}
+
+
+
 		// param count is equal, but types do not match exactly: check for method sub-signatures
 		// https://docs.oracle.com/javase/specs/jls/se8/html/jls-8.html#jls-8.4.2
 		for (int i = 0; i < parameterTypes.length; i++) {
@@ -1296,14 +1343,40 @@ public final class ReflectionUtils {
 			if (!upperType.isAssignableFrom(lowerType)) {
 				return false;
 			}
+
+			Type genericUpperType = candidate.getGenericParameterTypes()[i];
+			if (isGeneric(genericUpperType)) {
+				TypeVariable genericUpperTypeVariable = (TypeVariable) genericUpperType;
+				Class<?> actualUpper = typeVariableMap.get(genericUpperTypeVariable);
+				if (actualUpper != null && !actualUpper.isAssignableFrom(lowerType)) {
+					return false;
+				}
+			}
 		}
 
 		// all lower args are at least assignable to the corresponding upper arg, so
 		// lower is sub-signature of upper.
 		// check for generics in upper method
-		if (isGeneric(candidate)) {
-			return true;
-		}
+//		if (isGeneric(candidate)) {
+//			// if method has generic params, it is possible they are bound lower than expected
+//
+//			Type superClass = concreteCallingClass.getGenericSuperclass();
+//			Type[] interfaces = concreteCallingClass.getGenericInterfaces();
+//
+//			for (Type ift : interfaces) {
+//				if (ift instanceof ParameterizedType) {
+//					ParameterizedType pt = (ParameterizedType) ift;
+//					Type[] actualTypeArgs = pt.getActualTypeArguments();
+//					Class<?> rawType = (Class)pt.getRawType();
+//					TypeVariable[] types = rawType.getTypeParameters();
+//
+//					types.getClass();
+//				}
+//			}
+//
+//			return true;
+//		}
+
 		return true;
 	}
 

@@ -39,10 +39,18 @@ import java.util.function.Predicate;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
 import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.TOP_DOWN;
-import static org.junit.platform.commons.util.ReflectionUtils.*;
+import static org.junit.platform.commons.util.ReflectionUtils.findMethod;
+import static org.junit.platform.commons.util.ReflectionUtils.findMethods;
+import static org.junit.platform.commons.util.ReflectionUtils.invokeMethod;
+import static org.junit.platform.commons.util.ReflectionUtils.readFieldValue;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -690,11 +698,8 @@ class ReflectionUtilsTests {
 	@Test
 	void findMethodNewTest1() {
 		Optional<Method> method = findMethod(IntThing.class, "foo", String.class);
-		// I would expect to get no result here, however it appears that we detect the generic
-		// signature foo(Object). The problem is that subsequently trying to use the method
-		// as searched for - with a String - will fail.
+		// We expect to get no result back since the type variable is bound to Integer.
 		assertThat(method).isEmpty();
-//		ReflectionUtils.invokeMethod(method.get(), thing, "hello");
 	}
 
 	// New test case
@@ -1484,6 +1489,7 @@ class ReflectionUtilsTests {
 	}
 
 	private static class IntThing implements GenericThing<Integer> {
+	    @Override
 		public Integer foo(Integer aT) {
 			return 1;
 		}

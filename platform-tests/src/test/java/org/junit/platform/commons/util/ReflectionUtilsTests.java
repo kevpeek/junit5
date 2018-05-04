@@ -682,6 +682,7 @@ class ReflectionUtilsTests {
 	void findMethodByParameterTypesInGenericInterfaceImplementation() {
 		Class<?> ifc = InterfaceWithOverriddenGenericDefaultMethodImpl.class;
 		Optional<Method> method = findMethod(ifc, "foo", Number.class);
+		// expect no result because you cannot invoke foo(Number)
 		assertThat(method).isEmpty();
 	}
 

@@ -978,7 +978,7 @@ public final class ReflectionUtils {
 			List<Method> methods = current.isInterface() ? getMethods(current) : getDeclaredMethods(current, BOTTOM_UP);
 			for (Method method : methods) {
 				if (predicate.test(method)) {
-					if (previousMethods.stream().noneMatch(lower -> methodHasMatchingSubsignature(method, lower))) {
+					if (previousMethods.stream().noneMatch(lower -> isMethodShadowedBy(method, lower))) {
 						return Optional.of(method);
 					}
 				}
@@ -989,7 +989,7 @@ public final class ReflectionUtils {
 			for (Class<?> ifc : current.getInterfaces()) {
 				Optional<Method> optional = findMethod(ifc, predicate);
 				if (optional.isPresent()) {
-					if (previousMethods.stream().noneMatch(lower -> methodHasMatchingSubsignature(optional.get(), lower))) {
+					if (previousMethods.stream().noneMatch(lower -> isMethodShadowedBy(optional.get(), lower))) {
 						return optional;
 					}
 					methods.add(optional.get());
@@ -998,10 +998,6 @@ public final class ReflectionUtils {
 		}
 
 		return Optional.empty();
-	}
-
-	private static boolean methodHasMatchingSubsignature(Method upper, Method lower) {
-		return hasCompatibleSignature(upper, lower.getName(), lower.getParameterTypes());
 	}
 
 	/**

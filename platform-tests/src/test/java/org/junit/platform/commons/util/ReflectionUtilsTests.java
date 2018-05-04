@@ -10,22 +10,16 @@
 
 package org.junit.platform.commons.util;
 
-import static java.util.Arrays.stream;
-import static java.util.stream.Collectors.toList;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
-import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.TOP_DOWN;
-import static org.junit.platform.commons.util.ReflectionUtils.findMethod;
-import static org.junit.platform.commons.util.ReflectionUtils.findMethods;
-import static org.junit.platform.commons.util.ReflectionUtils.invokeMethod;
-import static org.junit.platform.commons.util.ReflectionUtils.readFieldValue;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.extensions.TempDirectory;
+import org.junit.jupiter.extensions.TempDirectory.Root;
+import org.junit.platform.commons.JUnitException;
+import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested1;
+import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested2;
+import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested3;
+import org.junit.platform.commons.util.ReflectionUtilsTests.Interface45.Nested5;
+import org.junit.platform.commons.util.ReflectionUtilsTests.InterfaceWithNestedClass.Nested4;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,16 +36,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.extensions.TempDirectory;
-import org.junit.jupiter.extensions.TempDirectory.Root;
-import org.junit.platform.commons.JUnitException;
-import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested1;
-import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested2;
-import org.junit.platform.commons.util.ReflectionUtilsTests.ClassWithNestedClasses.Nested3;
-import org.junit.platform.commons.util.ReflectionUtilsTests.Interface45.Nested5;
-import org.junit.platform.commons.util.ReflectionUtilsTests.InterfaceWithNestedClass.Nested4;
+import static java.util.Arrays.stream;
+import static java.util.stream.Collectors.toList;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
+import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.TOP_DOWN;
+import static org.junit.platform.commons.util.ReflectionUtils.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link ReflectionUtils}.
@@ -683,6 +675,52 @@ class ReflectionUtilsTests {
 		Optional<Method> method = findMethod(ifc, "foo", Number.class);
 		assertThat(method).isNotEmpty();
 		assertThat(method.get().getName()).isEqualTo("foo");
+	}
+
+	// new test case
+	@Test
+	void findMethodByParameterTypesInGenericInterfaceImplementation() {
+		Class<?> ifc = InterfaceWithOverriddenGenericDefaultMethodImpl.class;
+		Optional<Method> method = findMethod(ifc, "foo", Number.class);
+		assertThat(method).isEmpty();
+	}
+
+	// New test case
+	@Test
+	void findMethodNewTest1() {
+		Optional<Method> method = findMethod(IntThing.class, "foo", String.class);
+		// I would expect to get no result here, however it appears that we detect the generic
+		// signature foo(Object). The problem is that subsequently trying to use the method
+		// as searched for - with a String - will fail.
+		assertThat(method).isEmpty();
+//		ReflectionUtils.invokeMethod(method.get(), thing, "hello");
+	}
+
+	// New test case
+	@Test
+	void findMethodNewTest2() {
+		Optional<Method> method = findMethod(RegularNumberClass.class, "foo", Integer.class);
+		// I would expect the method to be found since it can be invoked with an Integer.
+		assertThat(method).isNotEmpty();
+	}
+
+	// New test case
+	@Test
+	void findMethodNewTest3() {
+		Optional<Method> method = findMethod(GenericNumberClass.class, "foo", Integer.class);
+		// I would expect the method to be found since it can be invoked with an Integer.
+		assertThat(method).isNotEmpty();
+	}
+
+	// New test case
+	@Test
+	void findMethodNewTest4() {
+		Optional<Method> method1 = findMethod(GenericNumberClass.class, "foo", Integer.class);
+		Optional<Method> method2 = findMethod(RegularNumberClass.class, "foo", Integer.class);
+
+		// regardless of whether the method is found in these two cases, I would expect them to both
+		// have the same behavior. We shouldn't care whether the return type is generic or not.
+		assertEquals(method1.isPresent(), method2.isPresent());
 	}
 
 	/**
@@ -1438,4 +1476,27 @@ class ReflectionUtilsTests {
 		}
 	}
 
+	interface GenericThing<T> {
+		default T foo(T aT) {
+			return null;
+		}
+	}
+
+	private static class IntThing implements GenericThing<Integer> {
+		public Integer foo(Integer aT) {
+			return 1;
+		}
+	}
+
+	private static class RegularNumberClass {
+		public Number foo(Number number) {
+			return null;
+		}
+	}
+
+	private static class GenericNumberClass {
+		public <T> T foo(Number number) {
+			return null;
+		}
+	}
 }

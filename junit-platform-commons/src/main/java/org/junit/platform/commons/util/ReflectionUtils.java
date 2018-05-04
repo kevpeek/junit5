@@ -10,46 +10,25 @@
 
 package org.junit.platform.commons.util;
 
-import static java.util.stream.Collectors.toCollection;
-import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toSet;
-import static org.apiguardian.api.API.Status.INTERNAL;
-import static org.junit.platform.commons.util.CollectionUtils.toUnmodifiableList;
-import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
-import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.TOP_DOWN;
+import org.apiguardian.api.API;
+import org.junit.platform.commons.JUnitException;
 
 import java.io.File;
-import java.lang.reflect.AccessibleObject;
-import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
+import java.lang.reflect.*;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apiguardian.api.API;
-import org.junit.platform.commons.JUnitException;
+import static java.util.stream.Collectors.*;
+import static org.apiguardian.api.API.Status.INTERNAL;
+import static org.junit.platform.commons.util.CollectionUtils.toUnmodifiableList;
+import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.BOTTOM_UP;
+import static org.junit.platform.commons.util.ReflectionUtils.HierarchyTraversalMode.TOP_DOWN;
 
 /**
  * Collection of utilities for working with the Java reflection APIs.
@@ -992,25 +971,37 @@ public final class ReflectionUtils {
 		Preconditions.notNull(clazz, "Class must not be null");
 		Preconditions.notNull(predicate, "Predicate must not be null");
 
+		Set<Method> previousMethods = new HashSet<>();
+
 		for (Class<?> current = clazz; current != null && current != Object.class; current = current.getSuperclass()) {
 			// Search for match in current type
 			List<Method> methods = current.isInterface() ? getMethods(current) : getDeclaredMethods(current, BOTTOM_UP);
 			for (Method method : methods) {
 				if (predicate.test(method)) {
-					return Optional.of(method);
+					if (previousMethods.stream().noneMatch(lower -> methodHasMatchingSubsignature(method, lower))) {
+						return Optional.of(method);
+					}
 				}
+				previousMethods.add(method);
 			}
 
 			// Search for match in interfaces implemented by current type
 			for (Class<?> ifc : current.getInterfaces()) {
 				Optional<Method> optional = findMethod(ifc, predicate);
 				if (optional.isPresent()) {
-					return optional;
+					if (previousMethods.stream().noneMatch(lower -> methodHasMatchingSubsignature(optional.get(), lower))) {
+						return optional;
+					}
+					methods.add(optional.get());
 				}
 			}
 		}
 
 		return Optional.empty();
+	}
+
+	private static boolean methodHasMatchingSubsignature(Method upper, Method lower) {
+		return hasCompatibleSignature(upper, lower.getName(), lower.getParameterTypes());
 	}
 
 	/**
@@ -1310,11 +1301,14 @@ public final class ReflectionUtils {
 				return false;
 			}
 		}
-		// lower is sub-signature of upper: check for generics in upper method
+
+		// all lower args are at least assignable to the corresponding upper arg, so
+		// lower is sub-signature of upper.
+		// check for generics in upper method
 		if (isGeneric(candidate)) {
 			return true;
 		}
-		return false;
+		return true;
 	}
 
 	static boolean isGeneric(Method method) {
